@@ -3,42 +3,34 @@ set -e
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
     -- Check if databases exist before creating them
-    DO
-    $$
+    DO $$
     BEGIN
     IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'airflow_db') THEN
         CREATE DATABASE airflow_db;
     END IF;
-    END
-    $$;
+    END $$;
 
-    DO
-    $$
+    DO $$
     BEGIN
     IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'app_db') THEN
         CREATE DATABASE app_db;
     END IF;
-    END
-    $$;
+    END $$;
 
     -- Check if users exist before creating them
-    DO
-    \$\$
+    DO $$
     BEGIN
         IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'airflow_user') THEN
             CREATE USER airflow_user WITH PASSWORD "$AIRFLOW_DB_PASSWORD";
         END IF;
-    END
-    \$\$;
+    END $$;
 
-    DO
-    \$\$
+    DO $$
     BEGIN
         IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_user') THEN
             CREATE USER app_user WITH PASSWORD "$APP_DB_PASSWORD";
         END IF;
-    END
-    \$\$;
+    END $$;
 
     -- Grant privileges
     GRANT ALL PRIVILEGES ON DATABASE airflow_db TO airflow_user;
