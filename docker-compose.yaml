@@ -13,8 +13,7 @@ services:
           - "5432:5432"
         volumes:
           - ./database/postgres_data:/var/lib/postgresql/data
-          - ./database/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
-    
+          - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql  # Use SQL instead of Bash
 
     ### Airflow Webserver (UI for DAG management) ###
     airflow-webserver:
