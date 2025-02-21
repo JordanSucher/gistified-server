@@ -1,7 +1,7 @@
 services:
     ### PostgreSQL Database (Stores Airflow metadata + App Data) ###
     postgres:
-        image: postgres:13
+        image: postgres:17
         container_name: postgres
         restart: always
         environment:
@@ -32,9 +32,11 @@ services:
         - ./airflow/logs:/opt/airflow/logs
         - ./airflow/config:/opt/airflow/config
         - ./airflow/data:/opt/airflow/data  # Mounted transcript and audio storage
+        - ./airflow/requirements.txt:/requirements.txt  # Install Airflow dependencies
         ports:
         - "8080:8080"
-        command: webserver
+        command: >
+            bash -c "pip install -r /requirements.txt && airflow webserver"
 
     ### Airflow Scheduler (Executes DAGs) ###
     airflow-scheduler:
@@ -52,7 +54,9 @@ services:
         - ./airflow/logs:/opt/airflow/logs
         - ./airflow/config:/opt/airflow/config
         - ./airflow/data:/opt/airflow/data  # Mounted transcript and audio storage
-        command: scheduler
+        - ./airflow/requirements.txt:/requirements.txt  # Install Airflow dependencies
+        command: >
+            bash -c "pip install -r /requirements.txt && airflow scheduler"
 
     ### Airflow Init (Bootstraps the environment) ###
     airflow-init:

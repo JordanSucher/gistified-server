@@ -1,0 +1,4 @@
+requests
+openai
+whisper
+psycopg2-binary
