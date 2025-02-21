@@ -25,7 +25,7 @@ services:
         - postgres
         environment:
         - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-        - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres/airflow_db
+        - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres/airflow_db
         - AIRFLOW_CONN_APP_DB=postgresql://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres:5432/app_db
         - AIRFLOW__WEBSERVER__DEFAULT_UI_TIMEZONE=UTC
         volumes:
@@ -46,7 +46,7 @@ services:
         - postgres
         environment:
         - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-        - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres/airflow_db
+        - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres/airflow_db
         - AIRFLOW_CONN_APP_DB=postgresql://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres:5432/app_db
         volumes:
         - ./airflow/dags:/opt/airflow/dags
@@ -63,7 +63,7 @@ services:
         - postgres
         environment:
         - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-        - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres/airflow_db
+        - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres/airflow_db
         - AIRFLOW_CONN_APP_DB=postgresql://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres:5432/app_db
         entrypoint: ["airflow", "db", "init"]
 

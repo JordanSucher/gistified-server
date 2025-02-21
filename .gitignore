@@ -1,3 +1,6 @@
 .env
 
 database/postgres_data
+
+airflow/logs
+airflow/data

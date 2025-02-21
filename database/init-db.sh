@@ -3,8 +3,23 @@ set -e
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
     -- Check if databases exist before creating them
-    SELECT 'CREATE DATABASE airflow_db' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'airflow_db')\gexec;
-    SELECT 'CREATE DATABASE app_db' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'app_db')\gexec;
+    DO
+    $$
+    BEGIN
+    IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'airflow_db') THEN
+        CREATE DATABASE airflow_db;
+    END IF;
+    END
+    $$;
+
+    DO
+    $$
+    BEGIN
+    IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'app_db') THEN
+        CREATE DATABASE app_db;
+    END IF;
+    END
+    $$;
 
     -- Check if users exist before creating them
     DO
