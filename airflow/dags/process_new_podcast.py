@@ -60,7 +60,7 @@ def insert_episodes(**kwargs):
     with psycopg2.connect(**DB_CONN) as conn:
         with conn.cursor() as cur:
             for episode in episode_details:
-                cur.execute("INSERT INTO 'Episode' (title, description, url, publicationId, publishedAt) VALUES (%s , %s, %s, %s, %s) ON CONFLICT (url) DO NOTHING", (episode["episode_title"], episode["episode_summary"], episode["episode_url"], pub_id, episode["episode_pub_date"]))
+                cur.execute("INSERT INTO \"Episode\" (title, description, url, publicationId, publishedAt) VALUES (%s , %s, %s, %s, %s) ON CONFLICT (url) DO NOTHING", (episode["episode_title"], episode["episode_summary"], episode["episode_url"], pub_id, episode["episode_pub_date"]))
             conn.commit()
             
 
@@ -222,7 +222,7 @@ def store_results(**kwargs):
 
                     # Insert summary
                     cur.execute(
-                        "INSERT INTO 'Summary' (content, episodeId, status) VALUES (%s, %s, %s)", (summary, episode_id, "processed")
+                        "INSERT INTO \"Summary\" (content, episodeId, status) VALUES (%s, %s, %s)", (summary, episode_id, "processed")
                         )
         
             conn.commit()
