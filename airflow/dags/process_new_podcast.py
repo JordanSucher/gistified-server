@@ -62,8 +62,7 @@ def insert_episodes(**kwargs):
             for episode in episode_details:
                 cur.execute("INSERT INTO episodes (title, description, url, publicationId, publishedAt) VALUES (%s , %s, %s, %s, %s) ON CONFLICT (url) DO NOTHING", (episode["episode_title"], episode["episode_summary"], episode["episode_url"], pub_id, episode["episode_pub_date"]))
             conn.commit()
-            cur.close()
-            conn.close()
+            
 
     return episode_details
 
@@ -100,7 +99,12 @@ def split_audio(chunk_size_mb=15, **kwargs):
         audio_path = episode["episode_path"]
         episode_url = episode["episode_url"]
 
-        audio = AudioSegment.from_file(audio_path)
+        try:
+            audio = AudioSegment.from_file(audio_path)
+        except Exception as e:
+            print(f"Error processing {audio_path}: {e}")
+            continue  # Skip this file
+
 
         # Estimate the duration of 10MB in milliseconds
         file_size_bytes = os.path.getsize(audio_path)
@@ -123,6 +127,7 @@ def generate_transcripts(**kwargs):
     client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     episode_transcripts = {}
+    transcript_paths = []
     
     audio_chunks = kwargs["ti"].xcom_pull(key="return_value", task_ids="split_audio")
 
@@ -141,82 +146,115 @@ def generate_transcripts(**kwargs):
     for episode_url in episode_transcripts:
         episode_transcripts[episode_url] = "".join(episode_transcripts[episode_url])
 
-    return episode_transcripts
+    # write transcripts to file
+    for episode_url, transcript in episode_transcripts.items():
+        safe_filename = re.sub(r'[^\w\-_\.]', '_', os.path.basename(episode_url))
+        transcript_paths.append({"episode_url": episode_url, "transcript_path": f"/opt/airflow/data/transcripts/{safe_filename}.txt"})
+        with open(f"/opt/airflow/data/transcripts/{safe_filename}.txt", "w") as f:
+            f.write(transcript)
+
+
+    return transcript_paths
 
 
 # Function to summarize text with OpenAI
 def summarize_text(**kwargs):
 
     client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    episode_transcripts = kwargs["ti"].xcom_pull(key="return_value", task_ids="generate_transcripts")
-    episode_summaries = []
+    transcript_paths = kwargs["ti"].xcom_pull(key="return_value", task_ids="generate_transcripts")
+    episode_summary_paths = []
 
-    for episode_url, transcript in episode_transcripts.items():
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "system", "content": 
-                        """
-                        You are an insightful and succinct podcast summarizer. 
-                        Please summarize the provided transcript in 500 words or less, with the idea of the "pareto principle" in mind - provide 80% of the value with 20% of the length. 
-                        Correct any misspellings in the transcript, especially misspelled names. 
-                        Ignore / leave out advertisements.
+    for episode in transcript_paths:
+        episode_url = episode["episode_url"]
+        transcript_path = episode["transcript_path"]
+        with open(transcript_path, "r") as f:
+            transcript = f.read()
 
-                        Generate 3 sections:
-                        1 - Key Takeaways (provide 5-10)
-                        2 - Quotes (pick 3 of the most interesting or surprising, provide no commentary. Specify who said them. Wrap the quote in single quotes)
-                        3 - Summary (break into short paragraphs)
+            response = client.chat.completions.create(
+                model="gpt-4",
+                messages=[{"role": "system", "content": 
+                            """
+                            You are an insightful and succinct podcast summarizer. 
+                            Please summarize the provided transcript in 500 words or less, with the idea of the "pareto principle" in mind - provide 80% of the value with 20% of the length. 
+                            Correct any misspellings in the transcript, especially misspelled names. 
+                            Ignore / leave out advertisements.
 
-                        Reply in a JSON string and nothing else: {takeaways: [1,2,3,4...], quotes: [1,2,3...], summary: [paragraph1, paragraph2...]}
-                        """
-                    }, {"role": "user", "content": transcript}]
-        )
+                            Generate 3 sections:
+                            1 - Key Takeaways (provide 5-10)
+                            2 - Quotes (pick 3 of the most interesting or surprising, provide no commentary. Specify who said them. Wrap the quote in single quotes)
+                            3 - Summary (break into short paragraphs)
 
-        episode_summaries.append({"episode_url": episode_url, "summary": response.choices[0].message.content})
+                            Reply in a JSON string and nothing else: {takeaways: [1,2,3,4...], quotes: [1,2,3...], summary: [paragraph1, paragraph2...]}
+                            """
+                        }, {"role": "user", "content": transcript}]
+            ) 
 
-    return episode_summaries
+            safe_filename = re.sub(r'[^\w\-_\.]', '_', os.path.basename(episode_url))
+            local_path = f"/opt/airflow/data/summaries/{safe_filename}.json"
+
+            with open(local_path, "w") as f:
+                f.write(response.choices[0].message.content)
+
+            
+            episode_summary_paths.append({"episode_url": episode_url, "summary_path": local_path})
+
+    return episode_summary_paths
 
 # Function to store results in the database
 def store_results(**kwargs):
-    episode_summaries = kwargs["ti"].xcom_pull(key="return_value", task_ids="summarize_text")
+    episode_summary_paths = kwargs["ti"].xcom_pull(key="return_value", task_ids="summarize_text")
 
     with psycopg2.connect(**DB_CONN) as conn:
         with conn.cursor() as cur:
-            for episode in episode_summaries:
-                episode_url = episode["episode_url"]
-                summary = episode["summary"]
-                # get episode id
-                cur.execute("SELECT id FROM episodes WHERE url = %s", (episode_url,))
-                result = cur.fetchone()
+            for episode in episode_summary_paths:
+                with open(episode["summary_path"], "r") as f:
+                    summary = f.read()
+                    episode_url = episode["episode_url"]
+                    # get episode id
+                    cur.execute("SELECT id FROM episodes WHERE url = %s", (episode_url,))
+                    result = cur.fetchone()
 
-                if not result:
-                    print(f"Episode with URL {episode_url} not found in database")
-                    continue
+                    if not result:
+                        print(f"Episode with URL {episode_url} not found in database")
+                        continue
 
-                episode_id = result[0]
+                    episode_id = result[0]
 
-                # Insert summary
-                cur.execute(
-                    "INSERT INTO summaries (content, episodeId, status) VALUES (%s, %s, %s)", (summary, episode_id, "processed")
-                    )
+                    # Insert summary
+                    cur.execute(
+                        "INSERT INTO summaries (content, episodeId, status) VALUES (%s, %s, %s)", (summary, episode_id, "processed")
+                        )
         
             conn.commit()
-            cur.close()
-            conn.close()
-
+            
 
 # Function to clean up temporary files
 def clean_up(**kwargs):
-    # Clean up temporary files
+    # Clean up main audio files
     main_files = kwargs["ti"].xcom_pull(key="return_value", task_ids="download_audio")
     for main_file in main_files:
         if os.path.exists(main_file["episode_path"]):
             os.remove(main_file["episode_path"])
 
+    # Clean up audio chunks
     audio_chunks = kwargs["ti"].xcom_pull(key="return_value", task_ids="split_audio")
     for chunk_path, episode_url in audio_chunks:
         if os.path.exists(chunk_path):
             os.remove(chunk_path)
 
+    # Clean up transcript files
+    transcript_files = kwargs["ti"].xcom_pull(key="return_value", task_ids="generate_transcripts")
+    for episode in transcript_files:
+        transcript_path = episode["transcript_path"]
+        if os.path.exists(transcript_path):
+            os.remove(transcript_path)
+
+    # Clean up summary files
+    summary_files = kwargs["ti"].xcom_pull(key="return_value", task_ids="summarize_text")
+    for episode in summary_files:
+        summary_path = episode["summary_path"]
+        if os.path.exists(summary_path):
+            os.remove(summary_path)
     
 
 
