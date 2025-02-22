@@ -209,10 +209,13 @@ def store_results(**kwargs):
             for episode in episode_summary_paths:
                 with open(episode["summary_path"], "r") as f:
                     summary = f.read()
+                    print("summary", summary)
                     episode_url = episode["episode_url"]
-                    # get episode id
-                    cur.execute("SELECT id FROM episodes WHERE url = %s", (episode_url,))
+                    print("episode_url", episode_url)
+                    # get episode id    
+                    cur.execute("SELECT id FROM episodes WHERE url = %s", (episode_url))
                     result = cur.fetchone()
+                    print("result", result)
 
                     if not result:
                         print(f"Episode with URL {episode_url} not found in database")
