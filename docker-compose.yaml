@@ -17,7 +17,7 @@ services:
 
     ### Airflow Webserver (UI for DAG management) ###
     airflow-webserver:
-        image: apache/airflow:2.6.3
+        build: ./airflow
         container_name: airflow_webserver
         restart: always
         depends_on:
@@ -37,12 +37,11 @@ services:
         - ./airflow/requirements.txt:/requirements.txt  # Install Airflow dependencies
         ports:
         - "8080:8080"
-        command: >
-            bash -c "pip install -r /requirements.txt && airflow webserver"
+        command: ["airflow", "webserver"]
 
     ### Airflow Scheduler (Executes DAGs) ###
     airflow-scheduler:
-        image: apache/airflow:2.6.3
+        build: ./airflow
         container_name: airflow_scheduler
         restart: always
         depends_on:
@@ -59,8 +58,7 @@ services:
         - ./airflow/config:/opt/airflow/config
         - ./airflow/data:/opt/airflow/data  # Mounted transcript and audio storage
         - ./airflow/requirements.txt:/requirements.txt  # Install Airflow dependencies
-        command: >
-            bash -c "pip install -r /requirements.txt && airflow scheduler"
+        command: ["airflow", "scheduler"]
 
     ### Airflow Init (Bootstraps the environment) ###
     airflow-init:
