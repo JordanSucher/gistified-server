@@ -22,6 +22,8 @@ services:
         restart: always
         depends_on:
         - postgres
+        env_file:
+            - ./.env
         environment:
         - AIRFLOW__CORE__EXECUTOR=LocalExecutor
         - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres/airflow_db
@@ -45,6 +47,8 @@ services:
         restart: always
         depends_on:
         - postgres
+        env_file:
+            - ./.env
         environment:
         - AIRFLOW__CORE__EXECUTOR=LocalExecutor
         - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres/airflow_db
@@ -64,6 +68,8 @@ services:
         container_name: airflow_init
         depends_on:
         - postgres
+        env_file:
+            - ./.env
         environment:
         - AIRFLOW__CORE__EXECUTOR=LocalExecutor
         - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres/airflow_db
