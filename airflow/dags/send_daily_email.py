@@ -53,7 +53,7 @@ def fetch_summaries(**kwargs):
                     FROM \"Summary\" s
                     JOIN \"Episode\" e ON s."episodeId" = e.id
                     JOIN \"Publication\" p ON e."publicationId" = p.id
-                    JOIN subscriptions sub ON sub."publicationId" = p.id
+                    JOIN \"Subscription\" sub ON sub."publicationId" = p.id
                     WHERE sub."userId" = %s AND e."publishedAt" >= NOW() - INTERVAL '1 day'
                 """, (user["id"],))
 
