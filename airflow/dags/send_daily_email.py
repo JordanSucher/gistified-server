@@ -84,26 +84,26 @@ def send_email(**kwargs):
     headers = {"Content-Type": "application/json"}
 
     for user_email, summaries in summaries_by_user.items():
-        email_body = f"""
-            <h1>Gistified Daily Summary</h1>
-            {''.join([
-                f"""
-                <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                    <img src="{s['publication_image']}" style="width: 60px; height: 60px; margin-right: 10px;" />
-                    <div>
-                        <a href="https://gistified.vercel.app/summaries/{s['id']}">
-                            <h2 style="margin: 0;">{s['episode_title']}</h2>
-                        </a>
-                        <h3 style="margin: 0;">{s['publication_title']}</h3>
-                    </div>
+        email_body = "<h1>Gistified Daily Summary</h1>"
+
+        for summary in summaries:
+            email_body += f"""
+            <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                <img src="{summary['publication_image']}" style="width: 60px; height: 60px; margin-right: 10px;" />
+                <div>
+                    <a href="https://gistified.vercel.app/summaries/{summary['id']}">
+                        <h2 style="margin: 0;">{summary['episode_title']}</h2>
+                    </a>
+                    <h3 style="margin: 0;">{summary['publication_title']}</h3>
                 </div>
-                <ul>
-                    {''.join([f"<li>{t}</li>" for t in s['content'].get('takeaways', [])])}
-                </ul>
-                """
-                for s in summaries
-            ])}
-        """
+            </div>
+            <ul>
+            """
+
+            for takeaway in summary["content"].get("takeaways", []):
+                email_body += f"<li>{takeaway}</li>"
+
+            email_body += "</ul>"
 
         payload = {
             "Messages": [
