@@ -80,7 +80,7 @@ def insert_recent_episodes(**kwargs):
             for episode in episodes:
                 cur.execute(
                     """
-                    INSERT INTO episodes (title, description, url, publicationId, publishedAt)
+                    INSERT INTO \"Episode\" (title, description, url, \"publicationId\", \"publishedAt\")
                     VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (url) DO NOTHING
                     RETURNING id, url
