@@ -51,10 +51,10 @@ def fetch_summaries(**kwargs):
                     SELECT s.id, s.content, e.title AS episode_title, e.url AS episode_url, 
                            p.title AS publication_title, p.imageurl AS publication_image
                     FROM \"Summary\" s
-                    JOIN \"Episode\" e ON s.episodeid = e.id
-                    JOIN publications p ON e.publicationid = p.id
-                    JOIN subscriptions sub ON sub.publicationid = p.id
-                    WHERE sub.userid = %s AND e.publishedat >= NOW() - INTERVAL '1 day'
+                    JOIN \"Episode\" e ON s."episodeId" = e.id
+                    JOIN publications p ON e."publicationId" = p.id
+                    JOIN subscriptions sub ON sub."publicationId" = p.id
+                    WHERE sub."userId" = %s AND e."publishedAt" >= NOW() - INTERVAL '1 day'
                 """, (user["id"],))
 
                 summaries = [{
