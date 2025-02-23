@@ -25,7 +25,7 @@ def fetch_users(**kwargs):
     """Fetch all users with 'daily' email preference."""
     with psycopg2.connect(**DB_CONN) as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, name, email FROM users WHERE emailpreference = 'daily'")
+            cur.execute("SELECT id, name, email FROM \"User\" WHERE emailpreference = 'daily'")
             users = [{"id": row[0], "name": row[1], "email": row[2]} for row in cur.fetchall()]
 
     if not users:
@@ -50,8 +50,8 @@ def fetch_summaries(**kwargs):
                 cur.execute("""
                     SELECT s.id, s.content, e.title AS episode_title, e.url AS episode_url, 
                            p.title AS publication_title, p.imageurl AS publication_image
-                    FROM summaries s
-                    JOIN episodes e ON s.episodeid = e.id
+                    FROM \"Summary\" s
+                    JOIN \"Episode\" e ON s.episodeid = e.id
                     JOIN publications p ON e.publicationid = p.id
                     JOIN subscriptions sub ON sub.publicationid = p.id
                     WHERE sub.userid = %s AND e.publishedat >= NOW() - INTERVAL '1 day'
