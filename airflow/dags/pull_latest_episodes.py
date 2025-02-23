@@ -2,12 +2,12 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
 import requests
-import openai
 import psycopg2
 import os
 import feedparser
-from pydub import AudioSegment
+import openai
 import re
+from pydub import AudioSegment
 
 # Database connection settings
 DB_CONN = {
@@ -18,178 +18,184 @@ DB_CONN = {
     "port": "5432",
 }
 
-
-# Function to fetch podcast metadata
-def fetch_podcast_metadata(feed_url, pub_id, **kwargs):
-    response = requests.get(feed_url)
-    response.raise_for_status()
-    # store feed_url as xcom
-    kwargs["ti"].xcom_push(key="feed_url", value=feed_url)
-    # store pub_id as xcom
-    kwargs["ti"].xcom_push(key="pub_id", value=pub_id)
-    # store rss_feed as xcom
-    kwargs["ti"].xcom_push(key="rss_feed", value=response.text)
-
-    #continue
-    return
+# Paths for storing files
+AUDIO_DIR = "/opt/airflow/data/audio"
+TRANSCRIPT_DIR = "/opt/airflow/data/transcripts"
+SUMMARY_DIR = "/opt/airflow/data/summaries"
 
 
-# Function to extract the latest episode URLs from an RSS feed
-def extract_latest_episodes(**kwargs):
-    feed_xml = kwargs["ti"].xcom_pull(key="rss_feed", task_ids="fetch_podcast_metadata")
-    feed = feedparser.parse(feed_xml)
-    episode_details = [
-        {
-            "episode_title": entry.title,
-            "episode_summary": entry.summary,
-            "episode_pub_date": entry.published,
-            "episode_url": entry.enclosures[0].href if entry.enclosures else None
-        } 
-        for entry in feed.entries
-        if entry.enclosures
-    ][:3]  # Get the latest 3 episodes
-    return episode_details
-
-# Function to insert episodes into the database
-def insert_episodes(**kwargs):
-    
-    # get pub_id and episode details
-    pub_id = kwargs["ti"].xcom_pull(key="pub_id", task_ids="fetch_podcast_metadata")
-    episode_details = kwargs["ti"].xcom_pull(key="return_value", task_ids="extract_latest_episodes")
-    
+def fetch_podcasts_from_db(**kwargs):
+    """Fetch all podcast RSS feed URLs from the Publication table."""
     with psycopg2.connect(**DB_CONN) as conn:
         with conn.cursor() as cur:
-            for episode in episode_details:
-                cur.execute("INSERT INTO \"Episode\" (title, description, url, \"publicationId\", \"publishedAt\") VALUES (%s , %s, %s, %s, %s) ON CONFLICT (url) DO NOTHING", (episode["episode_title"], episode["episode_summary"], episode["episode_url"], pub_id, episode["episode_pub_date"]))
+            cur.execute("SELECT id, title, rssFeedUrl FROM Publication")
+            publications = [{"id": row[0], "title": row[1], "rssFeedUrl": row[2]} for row in cur.fetchall()]
+
+    if not publications:
+        raise ValueError("No podcasts found in the database.")
+
+    kwargs["ti"].xcom_push(key="podcasts", value=publications)
+    return publications
+
+
+def fetch_recent_podcast_metadata(**kwargs):
+    """Fetch metadata for all feeds stored in the database."""
+    podcasts = kwargs["ti"].xcom_pull(key="podcasts", task_ids="fetch_podcasts_from_db")
+
+    recent_episodes = []
+    for podcast in podcasts:
+        feed_url = podcast["rssFeedUrl"]
+        response = requests.get(feed_url)
+        response.raise_for_status()
+
+        feed = feedparser.parse(response.text)
+        new_episodes = [
+            {
+                "publication_id": podcast["id"],
+                "episode_title": entry.title,
+                "episode_summary": entry.summary,
+                "episode_pub_date": entry.published,
+                "episode_url": entry.enclosures[0].href if entry.enclosures else None
+            }
+            for entry in feed.entries if entry.enclosures
+        ][:3]  # Get up to 3 most recent episodes per feed
+
+        recent_episodes.extend(new_episodes)
+
+    kwargs["ti"].xcom_push(key="recent_episodes", value=recent_episodes)
+    return recent_episodes
+
+
+def insert_recent_episodes(**kwargs):
+    """Insert new episodes into the database if they don't already exist and return inserted episodes."""
+    episodes = kwargs["ti"].xcom_pull(key="recent_episodes", task_ids="fetch_recent_podcast_metadata")
+
+    if not episodes:
+        raise ValueError("No new episodes found.")
+
+    inserted_episodes = []
+
+    with psycopg2.connect(**DB_CONN) as conn:
+        with conn.cursor() as cur:
+            for episode in episodes:
+                cur.execute(
+                    """
+                    INSERT INTO episodes (title, description, url, publicationId, publishedAt)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (url) DO NOTHING
+                    RETURNING id, url
+                    """,
+                    (episode["episode_title"], episode["episode_summary"], episode["episode_url"], episode["publication_id"], episode["episode_pub_date"])
+                )
+                result = cur.fetchone()
+                if result:
+                    inserted_episodes.append({"id": result[0], "url": result[1]})
+
             conn.commit()
-            
 
-    return episode_details
+    if not inserted_episodes:
+        raise ValueError("No new episodes were inserted.")
 
+    kwargs["ti"].xcom_push(key="inserted_episodes", value=inserted_episodes)
+    return inserted_episodes
 
-# Function to extract audio
 def download_audio(**kwargs):
-
-    episodes = kwargs["ti"].xcom_pull(key="return_value", task_ids="extract_latest_episodes")
+    """Download episode audio files."""
+    episodes = kwargs["ti"].xcom_pull(task_ids="insert_recent_episodes", key="inserted_episodes")
 
     episode_details_enriched = []
     for episode in episodes:
-        episode_url = episode["episode_url"]
-        safe_filename = re.sub(r'[^\w\-_\.]', '_', os.path.basename(episode_url))
-        local_path = f"/opt/airflow/data/audio/{safe_filename}.mp3"
+        episode_url = episode["url"]
+        safe_filename = re.sub(r'[^\w\-_]', '_', os.path.basename(episode_url))
+        local_path = os.path.join(AUDIO_DIR, safe_filename)
+
         response = requests.get(episode_url, stream=True)
         with open(local_path, "wb") as f:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
 
-        # ✅ Check if file exists and is non-empty
         if not os.path.exists(local_path) or os.path.getsize(local_path) == 0:
-            raise ValueError(f"Audio download failed for {episode_url}")
+            raise ValueError(f"Failed to download {episode_url}")
 
-    
         episode_details_enriched.append({
             "episode_url": episode_url,
             "episode_path": local_path
         })
 
+    kwargs["ti"].xcom_push(key="downloaded_audio", value=episode_details_enriched)
     return episode_details_enriched
 
-def split_audio(chunk_size_mb=15, **kwargs):
+def split_audio(**kwargs):
+    """Split audio files into chunks."""
 
-    episode_details_enriched = kwargs["ti"].xcom_pull(key="return_value", task_ids="download_audio")
-
+    episodes = kwargs["ti"].xcom_pull(task_ids="download_audio", key="downloaded_audio")
     chunks = []
 
-    for episode in episode_details_enriched:
+    for episode in episodes:
         audio_path = episode["episode_path"]
         episode_url = episode["episode_url"]
 
-        try:
-            audio = AudioSegment.from_file(audio_path)
-        except Exception as e:
-            print(f"Error processing {audio_path}: {e}")
-            continue  # Skip this file
-
-
-        # Estimate the duration of 10MB in milliseconds
-        file_size_bytes = os.path.getsize(audio_path)
-        duration_ms = len(audio)
-        bytes_per_ms = file_size_bytes / duration_ms  # Estimate bytes per millisecond
-
-        chunk_size_ms = (chunk_size_mb * 1024 * 1024) / bytes_per_ms  # Convert MB to ms
-        chunk_size_ms = int(chunk_size_ms)  # Ensure it's an integer
+        audio = AudioSegment.from_file(audio_path)
+        chunk_size_ms = 15 * 60 * 1000  # 15-minute chunks
 
         for i, start in enumerate(range(0, len(audio), chunk_size_ms)):
             chunk = audio[start:start + chunk_size_ms]
             chunk_path = f"{audio_path}_chunk_{i}.mp3"
             chunk.export(chunk_path, format="mp3")
-
-            # ✅ Ensure chunk is created
-            if not os.path.exists(chunk_path) or os.path.getsize(chunk_path) == 0:
-                raise ValueError(f"Audio chunking failed: {chunk_path}")
-
             chunks.append((chunk_path, episode_url))
 
+    kwargs["ti"].xcom_push(key="audio_chunks", value=chunks)
     return chunks
 
-
 def generate_transcripts(**kwargs):
-    client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    """Generate transcripts from audio chunks."""
 
-    episode_transcripts = {}
+    client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    audio_chunks = kwargs["ti"].xcom_pull(task_ids="split_audio", key="audio_chunks")
+    transcripts = {}
     transcript_paths = []
-    
-    audio_chunks = kwargs["ti"].xcom_pull(key="return_value", task_ids="split_audio")
 
     for chunk_path, episode_url in audio_chunks:
-
-        if not os.path.exists(chunk_path):
-            raise ValueError(f"Audio chunk not found: {chunk_path}")
-
         with open(chunk_path, "rb") as audio_file:
             response = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file,
             )
-            
+
             if not response.text.strip():
                 raise ValueError(f"Transcription failed for {chunk_path}")
-
-            if episode_url not in episode_transcripts:
-                episode_transcripts[episode_url] = []
-            episode_transcripts[episode_url].append(response.text)
+            
+        if episode_url not in transcripts:
+            transcripts[episode_url] = []
+        transcripts[episode_url].append(response.text)
 
     # Concatenate all transcripts for each episode
-    for episode_url in episode_transcripts:
-        episode_transcripts[episode_url] = "".join(episode_transcripts[episode_url])
+    for episode_url in transcripts:
+        transcripts[episode_url] = "".join(transcripts[episode_url])
 
-        if not episode_transcripts[episode_url].strip():
-            raise ValueError(f"Transcription failed for {episode_url}")
-
-    # write transcripts to file
-    for episode_url, transcript in episode_transcripts.items():
-        safe_filename = re.sub(r'[^\w\-_\.]', '_', os.path.basename(episode_url))
-        transcript_paths.append({"episode_url": episode_url, "transcript_path": f"/opt/airflow/data/transcripts/{safe_filename}.txt"})
-        with open(f"/opt/airflow/data/transcripts/{safe_filename}.txt", "w") as f:
+    for episode_url, transcript in transcripts.items():
+        safe_filename = re.sub(r'[^\w\-_]', '_', os.path.basename(episode_url))
+        transcript_path = os.path.join(TRANSCRIPT_DIR, f"{safe_filename}.txt")
+        with open(transcript_path, "w") as f:
             f.write(transcript)
 
+        transcript_paths.append({
+            "episode_url": episode_url,
+            "transcript_path": transcript_path
+        })
 
     return transcript_paths
 
-
-# Function to summarize text with OpenAI
 def summarize_text(**kwargs):
+    """Summarize transcripts and save to disk."""
 
     client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    transcript_paths = kwargs["ti"].xcom_pull(key="return_value", task_ids="generate_transcripts")
-    episode_summary_paths = []
+    transcript_paths = kwargs["ti"].xcom_pull(task_ids="generate_transcripts", key="return_value")
+    summary_paths = []
 
     for episode in transcript_paths:
-        episode_url = episode["episode_url"]
         transcript_path = episode["transcript_path"]
-
-        if not os.path.exists(transcript_path):
-            raise ValueError(f"Transcript not found: {transcript_path}")
+        episode_url = episode["episode_url"]
 
         with open(transcript_path, "r") as f:
             transcript = f.read()
@@ -214,20 +220,19 @@ def summarize_text(**kwargs):
             ) 
 
             if not response.choices[0].message.content.strip():
-                raise ValueError(f"Summarization failed for {episode_url}")
+                raise ValueError(f"Summary failed for {episode_url}")
 
-            safe_filename = re.sub(r'[^\w\-_\.]', '_', os.path.basename(episode_url))
-            local_path = f"/opt/airflow/data/summaries/{safe_filename}.json"
+            safe_filename = re.sub(r'[^\w\-_]', '_', os.path.basename(episode_url)) + ".json"
+            summary_path = os.path.join(SUMMARY_DIR, safe_filename)
 
-            with open(local_path, "w") as f:
+            with open(summary_path, "w") as f:
                 f.write(response.choices[0].message.content)
 
-            
-            episode_summary_paths.append({"episode_url": episode_url, "summary_path": local_path})
+            summary_paths.append({"episode_url": episode_url, "summary_path": summary_path})
 
-    return episode_summary_paths
+    return summary_paths
 
-# Function to store results in the database
+
 def store_results(**kwargs):
     episode_summary_paths = kwargs["ti"].xcom_pull(key="return_value", task_ids="summarize_text")
 
@@ -252,9 +257,8 @@ def store_results(**kwargs):
                         )
         
             conn.commit()
-            
 
-# Function to clean up temporary files
+
 def clean_up(**kwargs):
     # Clean up main audio files
     main_files = kwargs["ti"].xcom_pull(key="return_value", task_ids="download_audio") or []
@@ -288,38 +292,34 @@ def clean_up(**kwargs):
 default_args = {
     "owner": "airflow",
     "depends_on_past": False,
-    "start_date": datetime(2025, 2, 21),
+    "start_date": datetime(2025, 2, 22),
     "retries": 1,
     "retry_delay": timedelta(minutes=5),
 }
 
 dag = DAG(
-    "process_new_podcast",
+    "fetch_recent_podcast_episodes",
     default_args=default_args,
-    description="Process a newly added podcast",
-    schedule_interval=None,
+    description="Fetch and process recent podcast episodes from the database",
+    schedule_interval="0 * * * *",  # Runs every hour
+    catchup=False
 )
 
-# Define tasks
-fetch_metadata = PythonOperator(
-    task_id="fetch_podcast_metadata",
-    python_callable=fetch_podcast_metadata,
-    op_kwargs={
-        "feed_url": "{{ dag_run.conf['feed_url'] }}",
-        "pub_id": "{{ dag_run.conf['pub_id'] }}"
-        },
+fetch_podcasts = PythonOperator(
+    task_id="fetch_podcasts_from_db",
+    python_callable=fetch_podcasts_from_db,
     dag=dag,
 )
 
-get_episodes = PythonOperator(
-    task_id="extract_latest_episodes",
-    python_callable=extract_latest_episodes,
+fetch_metadata = PythonOperator(
+    task_id="fetch_recent_podcast_metadata",
+    python_callable=fetch_recent_podcast_metadata,
     dag=dag,
 )
 
 insert_episodes = PythonOperator(
-    task_id="insert_episodes",
-    python_callable=insert_episodes,
+    task_id="insert_recent_episodes",
+    python_callable=insert_recent_episodes,
     dag=dag,
 )
 
@@ -329,36 +329,35 @@ download = PythonOperator(
     dag=dag,
 )
 
-split = PythonOperator(
+split_audio = PythonOperator(
     task_id="split_audio",
     python_callable=split_audio,
     dag=dag,
 )
 
-transcribe = PythonOperator(
+generate_transcripts = PythonOperator(
     task_id="generate_transcripts",
     python_callable=generate_transcripts,
     dag=dag,
 )
 
-summarize = PythonOperator(
+summarize_text = PythonOperator(
     task_id="summarize_text",
     python_callable=summarize_text,
     dag=dag,
 )
 
-store = PythonOperator(
+store_results = PythonOperator(
     task_id="store_results",
     python_callable=store_results,
     dag=dag,
 )
 
-cleanup = PythonOperator(
+clean_up = PythonOperator(
     task_id="clean_up",
     python_callable=clean_up,
     dag=dag,
-    trigger_rule="all_done"
 )
 
-# Define task dependencies
-fetch_metadata >> get_episodes >> insert_episodes >> download >> split >> transcribe >> summarize >> store >> cleanup
+# Define dependencies
+fetch_podcasts >> fetch_metadata >> insert_episodes >> download >> split_audio >> generate_transcripts >> summarize_text >> store_results >> clean_up
