@@ -25,7 +25,7 @@ def fetch_users(**kwargs):
     """Fetch all users with 'daily' email preference."""
     with psycopg2.connect(**DB_CONN) as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, name, email FROM \"User\" WHERE emailpreference = 'daily'")
+            cur.execute("SELECT id, name, email FROM \"User\" WHERE \"emailPreference\" = 'daily'")
             users = [{"id": row[0], "name": row[1], "email": row[2]} for row in cur.fetchall()]
 
     if not users:
