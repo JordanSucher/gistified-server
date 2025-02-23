@@ -28,7 +28,7 @@ def fetch_podcasts_from_db(**kwargs):
     """Fetch all podcast RSS feed URLs from the Publication table."""
     with psycopg2.connect(**DB_CONN) as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, title, rssFeedUrl FROM Publication")
+            cur.execute("SELECT id, title, \"rssFeedUrl\" FROM \"Publication\"")
             publications = [{"id": row[0], "title": row[1], "rssFeedUrl": row[2]} for row in cur.fetchall()]
 
     if not publications:
@@ -357,6 +357,7 @@ clean_up = PythonOperator(
     task_id="clean_up",
     python_callable=clean_up,
     dag=dag,
+    trigger_rule="all_done"
 )
 
 # Define dependencies
