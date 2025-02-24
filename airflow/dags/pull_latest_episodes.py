@@ -68,6 +68,14 @@ def process_podcasts():
             }
             for entry in feed.entries[:3] if entry.enclosures
         ]
+    
+    @task
+    def flatten_episodes(nested_episodes: List[List[Dict]]) -> List[Dict]:
+        """Flatten list of episode lists into single list of episodes"""
+        flattened = []
+        for episode_list in nested_episodes:
+            flattened.extend(episode_list)
+        return flattened
 
     @task
     def insert_episode(episode: Dict) -> Dict:
@@ -242,14 +250,10 @@ def process_podcasts():
 
     # Define the task flow
     podcasts = fetch_podcasts()
-    podcast_episodes = get_podcast_episodes.expand(podcast=podcasts)
-
-    flattened_episodes = [
-        episode for podcast_episode_list in podcast_episodes 
-        for episode in podcast_episode_list
-    ]
-
-    new_episodes = insert_episode.expand(episode=flattened_episodes)
+    episodes = get_podcast_episodes.expand(podcast=podcasts)
+    # Flatten the nested list of episodes
+    flattened = flatten_episodes(episodes)
+    new_episodes = insert_episode.expand(episode=flattened)
     audio_files = process_audio.expand(episode=new_episodes)
     transcripts = transcribe_audio.expand(audio_info=audio_files)
     summaries = generate_summary.expand(transcript_info=transcripts)
