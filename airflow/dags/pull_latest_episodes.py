@@ -109,7 +109,11 @@ def process_podcasts():
     def process_audio(episode: Dict) -> Dict:
         """Download and split audio for single episode"""
         if not episode or episode["status"] == "exists":  # Skip if episode wasn't newly inserted
-            return None
+            return {
+            "episode_url": None,
+            "main_audio_path": None,
+            "chunk_paths": []
+        }
             
         episode_url = episode["url"]
         safe_filename = re.sub(r'[^\w\-_]', '_', os.path.basename(episode_url))
@@ -141,8 +145,12 @@ def process_podcasts():
     @task
     def transcribe_audio(audio_info: Dict) -> Dict:
         """Generate transcript for single episode"""
-        if not audio_info:  # Skip if no audio was processed
-            return None
+        if not audio_info or audio_info.episode_url is None:  # Skip if no audio was processed
+            return {
+            "episode_url": None,
+            "transcript_path": None,
+            "audio_paths": []
+        }
             
         client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         transcripts = []
@@ -172,8 +180,13 @@ def process_podcasts():
     @task
     def generate_summary(transcript_info: Dict) -> Dict:
         """Generate summary for single episode"""
-        if not transcript_info:  # Skip if no transcript was generated
-            return None
+        if not transcript_info or transcript_info["transcript_path"] is None:  # Skip if no transcript was generated
+            return {
+                "episode_url": None,
+                "summary_path": None,
+                "audio_paths": [],
+                "transcript_path": None
+            }
             
         client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         
@@ -217,7 +230,7 @@ def process_podcasts():
     @task
     def store_summary(summary_info: Dict) -> None:
         """Store summary and clean up files"""
-        if not summary_info:  # Skip if no summary was generated
+        if not summary_info or summary_info["summary_path"] is None:  # Skip if no summary was generated
             return
             
         with psycopg2.connect(**DB_CONN) as conn:
