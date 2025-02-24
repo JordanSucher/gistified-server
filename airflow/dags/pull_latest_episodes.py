@@ -108,7 +108,7 @@ def process_podcasts():
     @task
     def process_audio(episode: Dict) -> Dict:
         """Download and split audio for single episode"""
-        if not episode or episode["status"] == "exists":  # Skip if episode wasn't newly inserted
+        if not episode or episode["id"] is None:  # Skip if episode wasn't newly inserted
             return {
             "episode_url": None,
             "main_audio_path": None,
