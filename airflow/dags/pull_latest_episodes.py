@@ -8,6 +8,7 @@ import openai
 import re
 from pydub import AudioSegment
 from typing import List, Dict
+from itertools import chain  # Add this import
 
 
 # Database connection settings
@@ -242,9 +243,9 @@ def process_podcasts():
 
     # Define the task flow
     podcasts = fetch_podcasts()
-    episodes = get_podcast_episodes.expand(podcast=podcasts)
-    flattened_episodes = episodes.flatten()
-    new_episodes = insert_episode.expand(episode=flattened_episodes)
+    episodes_nested = get_podcast_episodes.expand(podcast=podcasts)
+    episodes = list(chain.from_iterable(episodes_nested))
+    new_episodes = insert_episode.expand(episode=episodes)
     audio_files = process_audio.expand(episode=new_episodes)
     transcripts = transcribe_audio.expand(audio_info=audio_files)
     summaries = generate_summary.expand(transcript_info=transcripts)
