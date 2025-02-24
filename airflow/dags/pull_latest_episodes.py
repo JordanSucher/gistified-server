@@ -242,14 +242,27 @@ def process_podcasts():
                 os.remove(path)
 
     # Define the task flow
+    # Fetch podcasts
     podcasts = fetch_podcasts()
+
+    # Get episodes per podcast (returns List[List[Dict]])
     episodes_nested = get_podcast_episodes.expand(podcast=podcasts)
-    episodes = list(chain.from_iterable(episodes_nested))
-    new_episodes = insert_episode.expand(episode=episodes)
-    audio_files = process_audio.expand(episode=new_episodes)
-    transcripts = transcribe_audio.expand(audio_info=audio_files)
-    summaries = generate_summary.expand(transcript_info=transcripts)
-    store_summary.expand(summary_info=summaries)
+
+    # Flatten automatically by mapping insert_episode to each sublist
+    new_episodes = insert_episode.map(episode=episodes_nested)
+
+    # Process audio for newly inserted episodes
+    audio_files = process_audio.map(episode=new_episodes)
+
+    # Transcribe audio
+    transcripts = transcribe_audio.map(audio_info=audio_files)
+
+    # Generate summaries
+    summaries = generate_summary.map(transcript_info=transcripts)
+
+    # Store summaries
+    store_summary.map(summary_info=summaries)
+
 
 # Create the DAG
 dag = process_podcasts()
