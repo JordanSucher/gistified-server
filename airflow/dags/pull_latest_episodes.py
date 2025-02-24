@@ -32,7 +32,9 @@ for directory in [AUDIO_DIR, TRANSCRIPT_DIR, SUMMARY_DIR]:
     schedule_interval="0 * * * *",
     start_date=datetime(2025, 2, 22),
     catchup=False,
-    tags=['podcast']
+    tags=['podcast'],
+    max_active_runs=1,
+    max_active_tasks=3
 )
 def process_podcasts():
     """
