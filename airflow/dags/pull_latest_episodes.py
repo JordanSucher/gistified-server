@@ -80,6 +80,7 @@ def process_podcasts():
     @task
     def insert_episode(episode: Dict) -> Dict:
         """Insert single episode and return info if new"""
+        print("Inserting episode:", episode)
         with psycopg2.connect(**DB_CONN) as conn:
             with conn.cursor() as cur:
                 cur.execute(
