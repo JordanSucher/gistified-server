@@ -145,7 +145,7 @@ def process_podcasts():
     @task
     def transcribe_audio(audio_info: Dict) -> Dict:
         """Generate transcript for single episode"""
-        if not audio_info or audio_info.episode_url is None:  # Skip if no audio was processed
+        if not audio_info or audio_info["episode_url"] is None:  # Skip if no audio was processed
             return {
             "episode_url": None,
             "transcript_path": None,
