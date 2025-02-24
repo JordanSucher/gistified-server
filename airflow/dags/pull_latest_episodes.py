@@ -243,7 +243,8 @@ def process_podcasts():
     # Define the task flow
     podcasts = fetch_podcasts()
     episodes = get_podcast_episodes.expand(podcast=podcasts)
-    new_episodes = insert_episode.expand(episode=episodes)
+    flattened_episodes = episodes.flatten()
+    new_episodes = insert_episode.expand(episode=flattened_episodes)
     audio_files = process_audio.expand(episode=new_episodes)
     transcripts = transcribe_audio.expand(audio_info=audio_files)
     summaries = generate_summary.expand(transcript_info=transcripts)
