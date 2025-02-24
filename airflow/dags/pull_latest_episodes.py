@@ -103,12 +103,12 @@ def process_podcasts():
                 
                 if result:
                     return {"id": result[0], "url": result[1]}
-                return None
+                return {"id": None, "url": episode["episode_url"], "status": "exists"}
 
     @task
     def process_audio(episode: Dict) -> Dict:
         """Download and split audio for single episode"""
-        if not episode:  # Skip if episode wasn't newly inserted
+        if not episode or episode["status"] == "exists":  # Skip if episode wasn't newly inserted
             return None
             
         episode_url = episode["url"]
