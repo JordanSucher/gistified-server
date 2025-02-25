@@ -46,6 +46,7 @@ def fetch_summaries(**kwargs):
 
     def safe_json_load(json_str):
         try:
+            json_str = json_str.replace("```json", "").replace("```", "")
             return json.loads(json_str) if json_str else None
         except json.JSONDecodeError:
             return None
