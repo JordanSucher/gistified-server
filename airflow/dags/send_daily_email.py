@@ -51,20 +51,22 @@ def fetch_summaries(**kwargs):
                     SELECT s.id, s.content, e.title AS episode_title, e.url AS episode_url, 
                            p.title AS publication_title, p.imageurl AS publication_image
                     FROM \"Summary\" s
-                    JOIN \"Episode\" e ON s."episodeId" = e.id
-                    JOIN \"Publication\" p ON e."publicationId" = p.id
-                    JOIN \"Subscription\" sub ON sub."publicationId" = p.id
-                    WHERE sub."userId" = %s AND e."publishedAt" >= NOW() - INTERVAL '1 day'
+                    JOIN \"Episode\" e ON s.\"episodeId\" = e.id
+                    JOIN \"Publication\" p ON e.\"publicationId\" = p.id
+                    JOIN \"Subscription\" sub ON sub.\"publicationId\" = p.id
+                    WHERE sub.\"userId\" = %s AND e.\"publishedAt\" >= NOW() - INTERVAL '1 day'
                 """, (user["id"],))
 
                 summaries = [{
                     "id": row[0],
-                    "content": json.loads(row[1]),  # Parse JSON content
+                    "content": json.loads(row[1]) or None,  # Parse JSON content
                     "episode_title": row[2],
                     "episode_url": row[3],
                     "publication_title": row[4],
                     "publication_image": row[5]
                 } for row in cur.fetchall()]
+
+                summaries = [summary for summary in summaries if summary["content"]]
 
                 if summaries:
                     summaries_by_user[user["email"]] = summaries
