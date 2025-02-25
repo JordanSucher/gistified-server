@@ -44,6 +44,13 @@ def fetch_summaries(**kwargs):
 
     summaries_by_user = {}
 
+    def safe_json_load(json_str):
+        try:
+            return json.loads(json_str) if json_str else None
+        except json.JSONDecodeError:
+            return None
+
+
     with psycopg2.connect(**DB_CONN) as conn:
         with conn.cursor() as cur:
             for user in users:
@@ -59,7 +66,7 @@ def fetch_summaries(**kwargs):
 
                 summaries = [{
                     "id": row[0],
-                    "content": json.loads(row[1]) or None,  # Parse JSON content
+                    "content": safe_json_load(row[1]),  # Parse JSON content
                     "episode_title": row[2],
                     "episode_url": row[3],
                     "publication_title": row[4],
