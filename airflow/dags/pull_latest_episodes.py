@@ -175,7 +175,7 @@ def process_podcasts():
                     conn.commit()
                     
                     if result:
-                        return {"id": result[0], "url": result[1]}
+                        return {"id": result[0], "url": result[1], "status": "new"}
                     
                     # Get the ID for existing episodes
                     cur.execute(
