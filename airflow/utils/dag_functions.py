@@ -130,7 +130,7 @@ def insert_episode_to_db(episode):
 def process_audio_for_episode(episode):
     """Download and split audio for single episode"""
     if not episode or episode.get("status") != "new":
-        logging.info(f"Skipping audio processing for existing episode: {episode.get('url')}")
+        logging.info(f"Skipping audio processing for existing episode: {episode.get('url') if episode else None}")
         return {
             "episode_url": episode.get("url") if episode else None,
             "main_audio_path": None,

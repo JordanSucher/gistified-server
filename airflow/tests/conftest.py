@@ -25,6 +25,12 @@ def mock_db_conn():
             'cursor': mock_cursor
         }
         
+@pytest.fixture
+def valid_episode():
+    return {
+        "url": "http://example.com/podcast.mp3",
+        "status": "new"
+    }
 
 @pytest.fixture
 def mock_openai():
