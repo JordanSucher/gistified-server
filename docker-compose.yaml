@@ -30,6 +30,7 @@ services:
         - AIRFLOW_CONN_APP_DB=postgresql://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres:5431/app_db
         - AIRFLOW__WEBSERVER__DEFAULT_UI_TIMEZONE=UTC
         - AIRFLOW__API__AUTH_BACKEND=airflow.api.auth.backend.session,airflow.api.auth.backend.basic_auth
+        - PYTHONPATH=/opt/airflow:${PYTHONPATH}
         volumes:
         - ./airflow/tests:/opt/airflow/tests
         - ./airflow/dags:/opt/airflow/dags
@@ -56,6 +57,7 @@ services:
         - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres/airflow_db
         - AIRFLOW_CONN_APP_DB=postgresql://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres:5431/app_db
         - AIRFLOW__API__AUTH_BACKEND=airflow.api.auth.backend.session,airflow.api.auth.backend.basic_auth
+        - PYTHONPATH=/opt/airflow:${PYTHONPATH}
         volumes:
         - ./airflow/tests:/opt/airflow/tests
         - ./airflow/dags:/opt/airflow/dags
