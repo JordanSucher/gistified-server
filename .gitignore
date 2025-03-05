@@ -4,3 +4,7 @@ database/postgres_data
 
 airflow/logs
 airflow/data
+airflow/dags/__pycache__
+
+CLAUDE.md
+

@@ -10,7 +10,7 @@ services:
         - AIRFLOW_DB_PASSWORD=${AIRFLOW_DB_PASSWORD}
         - APP_DB_PASSWORD=${APP_DB_PASSWORD}
         ports:
-          - "5432:5432"
+          - "5431:5432"
         volumes:
           - ./database/postgres_data:/var/lib/postgresql/data
           - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql  # Use SQL instead of Bash
@@ -27,11 +27,13 @@ services:
         environment:
         - AIRFLOW__CORE__EXECUTOR=LocalExecutor
         - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres/airflow_db
-        - AIRFLOW_CONN_APP_DB=postgresql://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres:5432/app_db
+        - AIRFLOW_CONN_APP_DB=postgresql://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres:5431/app_db
         - AIRFLOW__WEBSERVER__DEFAULT_UI_TIMEZONE=UTC
         - AIRFLOW__API__AUTH_BACKEND=airflow.api.auth.backend.session,airflow.api.auth.backend.basic_auth
         volumes:
+        - ./airflow/tests:/opt/airflow/tests
         - ./airflow/dags:/opt/airflow/dags
+        - ./airflow/utils:/opt/airflow/utils
         - ./airflow/logs:/opt/airflow/logs
         - ./airflow/config:/opt/airflow/config
         - ./airflow/data:/opt/airflow/data  # Mounted transcript and audio storage
@@ -52,10 +54,12 @@ services:
         environment:
         - AIRFLOW__CORE__EXECUTOR=LocalExecutor
         - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres/airflow_db
-        - AIRFLOW_CONN_APP_DB=postgresql://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres:5432/app_db
+        - AIRFLOW_CONN_APP_DB=postgresql://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres:5431/app_db
         - AIRFLOW__API__AUTH_BACKEND=airflow.api.auth.backend.session,airflow.api.auth.backend.basic_auth
         volumes:
+        - ./airflow/tests:/opt/airflow/tests
         - ./airflow/dags:/opt/airflow/dags
+        - ./airflow/utils:/opt/airflow/utils
         - ./airflow/logs:/opt/airflow/logs
         - ./airflow/config:/opt/airflow/config
         - ./airflow/data:/opt/airflow/data  # Mounted transcript and audio storage
@@ -73,7 +77,7 @@ services:
         environment:
         - AIRFLOW__CORE__EXECUTOR=LocalExecutor
         - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres/airflow_db
-        - AIRFLOW_CONN_APP_DB=postgresql://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres:5432/app_db
+        - AIRFLOW_CONN_APP_DB=postgresql://airflow_user:${AIRFLOW_DB_PASSWORD}@postgres:5431/app_db
         - AIRFLOW__API__AUTH_BACKEND=airflow.api.auth.backend.session,airflow.api.auth.backend.basic_auth
         entrypoint: ["airflow", "db", "init"]
 

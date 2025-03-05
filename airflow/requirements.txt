@@ -3,3 +3,6 @@ openai
 psycopg2-binary
 feedparser
 pydub
+pytest
+pytest-cov
+pytest-mock
